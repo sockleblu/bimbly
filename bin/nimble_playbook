@@ -1,0 +1,44 @@
+#!/usr/bin/env ruby
+
+require 'yaml'
+require 'bimbly'
+
+raise ArgumentError, "Supply a config yaml file and a playbook yaml file" if ARGV.nil?
+
+config, playbook = ARGV
+
+raise ArgumentError, "Supply a config yaml file" if config.nil?
+raise ArgumentError, "Supply a playbook yaml file" if playbook.nil?
+
+playbook = YAML.load_file(playbook)
+
+raise ArgumentError, "Supply a valid yaml file for playbook" unless
+  playbook.class == Hash or playbook.class == Array
+
+nimbly = Bimbly.new(file: config)
+
+playbook.each_with_index do |play, play_index|
+  play.each do |task|
+    operation = task.shift.downcase
+    task.each do |object_array|
+      object_array.each_with_index do |object_set, object_index|
+        object_set.each do |object, values|
+          method_call = "#{operation}_#{object}"
+          values = {} if values.nil?
+          method_call = "#{method_call}_by_id" unless values["id"].nil?
+          
+          if nimbly.respond_to?(method_call.to_sym)
+            nimbly.send(method_call.to_sym,
+                        id: values["id"],
+                        params: values["params"],
+                        payload: values["request"])
+            
+            puts nimbly.call
+          else
+            puts "There was a problem with object set at location: #{object_index} of the #{play_index} task. Could not find a method with the name #{method_call}"
+          end
+        end
+      end
+    end
+  end
+end
